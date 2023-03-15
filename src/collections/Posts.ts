@@ -1,6 +1,6 @@
 import type Agenda from 'agenda';
-import dayjs from 'dayjs';
 import { Post } from 'payload/generated-types';
+import { compareAsc } from 'date-fns';
 import {
   CollectionAfterChangeHook,
   CollectionBeforeChangeHook,
@@ -10,16 +10,16 @@ import {
 const afterChangeHook: CollectionAfterChangeHook<Post> = async ({req, operation, doc, previousDoc}) => {
   switch (operation) {
     case 'create':
-    if (doc.status === 'draft' && doc.publishedSchedule && dayjs(doc.publishedSchedule).format() > dayjs().format()) {
+    if (doc.status === 'draft' && doc.publishedSchedule && compareAsc(new Date(doc.publishedSchedule), new Date()) === 1) {
         const agenda = req.app.get('agenda') as Agenda;
-        await agenda.schedule(dayjs(doc.publishedSchedule).format(), 'publish-post', {
+        await agenda.schedule(new Date(doc.publishedSchedule), 'publish-post', {
           id: doc.id,
           title: doc.title
         })
       }
       break;
       case 'update':
-      if (doc.status === 'draft' && doc.publishedSchedule && dayjs(doc.publishedSchedule).format() > dayjs().format()) {
+      if (doc.status === 'draft' && doc.publishedSchedule && compareAsc(new Date(doc.publishedSchedule), new Date()) === 1) {
         const agenda = req.app.get('agenda') as Agenda;
         let agendaJobs = await agenda.jobs({
           name: 'publish-post',
@@ -28,7 +28,7 @@ const afterChangeHook: CollectionAfterChangeHook<Post> = async ({req, operation,
         if (agendaJobs.length === 1) {
           await agendaJobs[0].remove();
         }
-        await agenda.schedule(dayjs(doc.publishedSchedule).format(), 'publish-post', {
+        await agenda.schedule(new Date(doc.publishedSchedule), 'publish-post', {
           id: doc.id,
           title: doc.title
         })
@@ -43,7 +43,7 @@ const afterChangeHook: CollectionAfterChangeHook<Post> = async ({req, operation,
 
 const beforeChangeHook: CollectionBeforeChangeHook<Post> = async ({data, req, operation, originalDoc}) => {
   if (data.status === 'published') {
-    data.publishedDate = dayjs().format();
+    data.publishedDate = new Date().toISOString();
   }
   return data;
 }
